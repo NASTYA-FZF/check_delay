@@ -3,32 +3,19 @@
 #include "signalProccesser.h"
 using namespace std;
 
-void print_graph_file(std::vector<double> s, std::vector<double> t, std::string filename, std::string title, std::string xlabel, std::string ylabel)
-{
-	std::ofstream file;          // поток для записи
-	file.open("graphs/" + filename, std::ios::binary); // окрываем файл для записи
-	file << "title:" + title << std::endl;
-	file << "xlabel:" + xlabel << std::endl;
-	file << "ylabel:" + ylabel << std::endl;
-	file << "pointX:";
-	for (int i = 0; i < t.size(); i++) {
-		file << t[i] << " ";
-	}
-	file << "\npointY:";
-	for (int i = 0; i < s.size(); i++) {
-		file << s[i] << " ";
-	}
-	file.close();
-}
-
 std::vector<bool> generate_bits(int nbits, int sample)
 {
 	vector<bool> result(sample);
 	vector<bool> bits(nbits);
+	std::random_device rd;
+	std::mt19937 gen(rd());
+	std::bernoulli_distribution dist(0.5);
+
+	// Генерация последовательности
 	for (int i = 0; i < nbits; i++) {
-		bits[i] = std::rand() > RAND_MAX / 2;
+		bits[i] = dist(gen);
 	}
-	int sam_bit = ceil((double)sample / nbits);
+	int sam_bit = ceil((double)sample / nbits); 
 	for (int i = 0; i < sample; i++) {
 		result[i] = bits[floor((double)i / sam_bit)];
 	}
@@ -151,10 +138,11 @@ void addNoise(signal s, double snr, signal& s_n)
 	std::normal_distribution<double> dist(0.0, 1.0);
 
 	// Вычисление мощности сигнала с использованием std::accumulate
-	double signal_power = std::accumulate(s_n.s.begin(), s_n.s.end(), 0.0,
-		[](double sum, const base& sample) {
-			return sum + std::norm(sample);
-		}) / s_n.s.size();
+	double signal_power = 0.;
+	for (auto sample : s_n.s) {
+		signal_power += std::norm(sample);
+	}
+	signal_power /= s_n.N;
 
 	double snr_linear = std::pow(10.0, snr / 10.0);
 	double noise_power = signal_power / snr_linear;
@@ -232,6 +220,16 @@ std::vector<double> modulation::getT()
 double modulation::getDuration()
 {
 	return duration;
+}
+
+std::vector<double> modulation::getBits()
+{
+	std::vector<double> double_vec(bits.size());
+
+	for (size_t i = 0; i < bits.size(); ++i) {
+		double_vec[i] = bits[i] ? 1.0 : 0.0;
+	}
+	return double_vec;
 }
 
 void modulation::manipulation()

@@ -54,8 +54,6 @@ struct signal {
 	}
 };
 
-void print_graph_file(std::vector<double> s, std::vector<double> t, std::string filename, std::string title, std::string xlabel, std::string ylabel);
-
 std::vector<bool> generate_bits(int nbits, int sample);
 
 void fft(std::vector<base>& a, bool invert);
@@ -101,6 +99,8 @@ public:
 	std::vector<double> getT();
 
 	double getDuration();
+
+	std::vector<double> getBits();
 
 	void manipulation();
 

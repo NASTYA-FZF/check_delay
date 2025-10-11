@@ -52,6 +52,7 @@ void CcheckdelayDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Text(pDX, IDC_EDIT_SAMPLE_BASE2, max_snr);
 	DDX_Text(pDX, IDC_EDIT_SNR3, step_snr);
 	DDX_Text(pDX, IDC_EDIT_SNR4, N_generate);
+	DDX_Control(pDX, IDC_PROGRESS1, progress_experement);
 }
 
 BEGIN_MESSAGE_MAP(CcheckdelayDlg, CDialogEx)
@@ -62,6 +63,8 @@ BEGIN_MESSAGE_MAP(CcheckdelayDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_RADIO_PM, &CcheckdelayDlg::OnBnClickedRadioPm)
 	ON_BN_CLICKED(IDC_RADIO_FRM, &CcheckdelayDlg::OnBnClickedRadioFrm)
 	ON_BN_CLICKED(IDC_BUTTON_ESTIMATE, &CcheckdelayDlg::OnBnClickedButtonEstimate)
+	ON_BN_CLICKED(IDC_BUTTON_DRAW_ONE, &CcheckdelayDlg::OnBnClickedButtonDrawOne)
+	ON_BN_CLICKED(IDC_BUTTON_DRAW_MANY, &CcheckdelayDlg::OnBnClickedButtonDrawMany)
 END_MESSAGE_MAP()
 
 
@@ -77,7 +80,7 @@ BOOL CcheckdelayDlg::OnInitDialog()
 	SetIcon(m_hIcon, FALSE);		// Мелкий значок
 
 	// TODO: добавьте дополнительную инициализацию
-	srand(time(NULL));
+	progress_experement.SetRange(0, 100);
 	return TRUE;  // возврат значения TRUE, если фокус не передан элементу управления
 }
 
@@ -165,10 +168,10 @@ std::pair<double, double> mainProcess(double _fd, int _nbits, double _bitrate, d
 	int sample = fully_signal_noise.N;
 	fully_signal_noise.resize(sample);
 	base_signal_noise.resize(sample);
-	print_graph_file(fully_signal_noise.getSreal(), t, "fully_signal s.txt", "Сигнал полного", "время, с", "");
-	print_graph_file(base_signal_noise.getSreal(), t, "base_signal s.txt", "Сигнал опорного", "время, с", "");
-	print_graph_file(corr, t_corr, "correlation.txt", "Корреляции", "время, с", "");
+	print_graph_file(manipulated.getBits(), t, "fully_signal_s.txt", "Кодовая последовательность", "время, с", "Значение бита", "", { _delay / 1000, _delay / 1000 + duration_base / 1000 });
+	print_add_graph(fully_signal_noise.getSreal(), t, "fully_signal_s.txt", "Сигнал полного", "время, с", "", "", { _delay / 1000, _delay / 1000 + duration_base / 1000 });
 	auto a = findMax(corr, t_corr, _delay);
+	print_add_graph(corr, t_corr, "fully_signal_s.txt", "Корреляция", "Временной сдвиг τ, с", "Коэффициент корреляции, R(τ)", "", { a.first });
 	return a;
 }
 
@@ -184,7 +187,7 @@ void CcheckdelayDlg::OnBnClickedButcreate()
 		result_delay.Format(_T("Оцененный сдвиг: %.4f мс; Отличие от заданного: %.3f %%; Корректно: в пределах одного символа"), mark_delay.first * 1000, mark_delay.second);
 	}
 	UpdateData(FALSE);
-	WinExec("python drawing.py", SW_HIDE);
+	WinExec("python drawing.py fully_signal_s.txt", SW_HIDE);
 }
 
 
@@ -208,6 +211,7 @@ void CcheckdelayDlg::OnBnClickedRadioFrm()
 	type = FM;
 }
 
+
 void StartThread(CcheckdelayDlg* dlg)
 {
 	double min_snr = dlg->min_snr;
@@ -215,19 +219,25 @@ void StartThread(CcheckdelayDlg* dlg)
 	double step_snr = dlg->step_snr;
 	int num_thread = 6;
 	int point = (max_snr - min_snr) / step_snr;
-	dlg->vec_p.resize(point);
+	dlg->vec_p[0].resize(point);
+	dlg->vec_p[1].resize(point);
+	dlg->vec_p[2].resize(point);
 	dlg->vec_snr.resize(point);
 	std::vector<std::thread> thr(num_thread);
-	for (int i = 0; i < point; i++) {
+	std::vector<type_modulation> types({ AM, PM, FM, AM, PM, FM });
+	for (int i = 0; i < point; i += 2) {
+		dlg->progress_experement.SetPos((double)i / point * 100);
+		dlg->vec_snr[i] = min_snr + step_snr * i;
+		dlg->vec_snr[i + 1] = min_snr + step_snr * (i + 1);
 		for (int j = 0; j < num_thread; j++) {
-			if (i + j >= point) {
+			if (i + j / 3 >= point) {
 				break;
 			}
 			// Проверяем, можно ли присвоить новый поток
 			if (thr[j].joinable()) {
 				thr[j].join(); // Ждем завершения предыдущего потока
 			}
-			dlg->vec_snr[i + j] = min_snr + step_snr * (i + j);
+
 			thr[j] = std::thread(
 				mainThread, 
 				dlg->fd, 
@@ -235,11 +245,11 @@ void StartThread(CcheckdelayDlg* dlg)
 				dlg->bitrate, 
 				dlg->fc, 
 				dlg->delay, 
-				dlg->vec_snr[i + j],
+				dlg->vec_snr[i + j / 3],
 				dlg->snr_fully, 
 				dlg->sample_base,
-				dlg->type, 
-				std::ref(dlg->vec_p[i + j]),
+				types[j],
+				std::ref(dlg->vec_p[types[j]][i + j / 3]),
 				dlg->N_generate);
 		}
 
@@ -249,9 +259,11 @@ void StartThread(CcheckdelayDlg* dlg)
 				thr[j].join();
 			}
 		}
-		i += num_thread - 1;
 	}
-	print_graph_file(dlg->vec_p, dlg->vec_snr, "experience.txt", "Корректность", "SNR", "Вероятность");
+	dlg->progress_experement.SetPos(100);
+	print_graph_file(dlg->vec_p[0], dlg->vec_snr, "experience.txt", "Исследование устойчивости оценки временной задержки", "SNR, дБ", "Доверительная вероятность", "AM");
+	print_add_points(dlg->vec_p[1], dlg->vec_snr, "experience.txt", "PM2");
+	print_add_points(dlg->vec_p[2], dlg->vec_snr, "experience.txt", "MFM");
 	WinExec("python drawing.py experience.txt", SW_HIDE);
 }
 
@@ -259,6 +271,21 @@ void StartThread(CcheckdelayDlg* dlg)
 void CcheckdelayDlg::OnBnClickedButtonEstimate()
 {
 	// TODO: добавьте свой код обработчика уведомлений
+	UpdateData();
 	std::thread t1(StartThread, this);
 	t1.detach();
+}
+
+
+void CcheckdelayDlg::OnBnClickedButtonDrawOne()
+{
+	// TODO: добавьте свой код обработчика уведомлений
+	WinExec("python drawing.py fully_signal_s.txt", SW_HIDE);
+}
+
+
+void CcheckdelayDlg::OnBnClickedButtonDrawMany()
+{
+	// TODO: добавьте свой код обработчика уведомлений
+	WinExec("python drawing.py experience.txt", SW_HIDE);
 }
