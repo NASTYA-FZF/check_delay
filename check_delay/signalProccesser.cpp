@@ -55,17 +55,11 @@ void correlation(signal s1, signal s2, double step, std::vector<double>& corr, s
 		result[i] = s1.s[i] * std::conj(s2.s[i]);
 	}
 	fft(result, false);
-	corr.resize(s1.size());
-	t.resize(s1.size());
-	int center = corr.size() / 2;
+	corr.resize(s1.N);
+	t.resize(s1.N);
 	for (int i = 0; i < corr.size(); i++) {
-		if (i >= center) {
-			corr[i - center] = (result[i] * std::conj(result[i])).real();
-		}
-		else {
-			corr[i + center] = (result[i] * std::conj(result[i])).real();
-		}
-		t[i] = ((double)i - (double)center) * step;
+		corr[i] = (result[i] * std::conj(result[i])).real();
+		t[i] = i * step;
 	}
 }
 
@@ -155,12 +149,96 @@ void addNoise(signal s, double snr, signal& s_n)
 	}
 }
 
+double criteria(std::vector<double> corr)
+{
+	int indexMax = std::max_element(corr.begin(), corr.end()) - corr.begin();
+	double c_max = corr[indexMax];
+	int mask = 2;
+	double sigma = 0;
+	for (int i = 0; i < corr.size(); i++) {
+		if (i < indexMax - mask || i > indexMax + mask) {
+			sigma += (corr[i] - c_max) * (corr[i] - c_max);
+		}
+	}
+	sigma = sqrt(sigma) / (corr.size() - (mask * 2 + 1));
+	return c_max / sigma;
+}
+
+void one_sdvig(signal s_fully, signal s, int delay, std::vector<double>& res_fft)
+{
+	std::vector<base> temp;
+	int size_2 = s.s.size();
+	s.resize(s.N);
+	int size = s.N;
+	temp.resize(size);
+	for (int i = 0; i < size; i++) {
+		temp[i] = s.s[i] * std::conj(s_fully.s[i + delay]);
+	}
+	temp.resize(size_2);
+	fft(temp, true);
+	res_fft.resize(size_2);
+	for (int i = 0; i < size_2; i++) {
+		res_fft[i] = sqrt(temp[i].real() * temp[i].real() + temp[i].imag() * temp[i].imag());
+	}
+}
+
+std::vector<std::vector<double>> create_f_t(signal s_fully, signal s, double fd, std::vector<double>& ff, std::vector<double>& tau)
+{
+	int max_delay = s_fully.N - s.N;
+	std::vector<std::vector<double>> res(max_delay);
+	int max_threads = 4;
+	thread* thrs = new thread[max_threads];
+	for (int i = 0; i < max_delay; i += max_threads) {
+		for (int j = 0; j < max_threads; j++) {
+			if (i + j >= max_delay) {
+				continue;
+			}
+			thrs[j] = thread(one_sdvig,
+				s_fully,
+				s,
+				i + j,
+				std::ref(res[i + j])
+			);
+		}
+		for (int j = 0; j < max_threads; j++) {
+			if (thrs[j].joinable()) {
+				thrs[j].join();
+			}
+		}
+	}
+
+	ff.resize(res[0].size());
+	tau.resize(res.size());
+	double step_ff = fd / ff.size();
+	double step_tau = 1. / fd;
+	for (int i = 0; i < ff.size(); i++) {
+		ff[i] = i * step_ff;
+	}
+	for (int i = 0; i < tau.size(); i++) {
+		tau[i] = i * step_tau;
+	}
+
+	return res;
+}
+
+std::pair<double, double> find_sdvig(std::vector<std::vector<double>>& image, std::vector<double>& ff, std::vector<double>& tau)
+{
+	std::vector<int> max_ff(tau.size());
+	std::vector<double> max_value_ff(tau.size());
+	for (int i = 0; i < image.size(); i++) {
+		max_ff[i] = std::max_element(image[i].begin(), image[i].end()) - image[i].begin();
+		max_value_ff[i] = image[i][max_ff[i]];
+	}
+	int indexMax = std::max_element(max_value_ff.begin(), max_value_ff.end()) - max_value_ff.begin();
+	return std::pair<double, double>(ff[max_ff[indexMax]], tau[indexMax]);
+}
+
 void modulation::setParam(double _fd, int _nbits, double _bitrate, double _fc, double _delay, double _sample_base, type_modulation _type)
 {
 	fd = _fd;
 	nbits = _nbits;
 	bitrate = _bitrate;
-	fc = _fc * 1000;
+	deltaF = _fc;
 	delay = ceil(_delay * fd);
 	sample_base = (double)_sample_base * fd;
 	type = _type;
@@ -184,6 +262,7 @@ void modulation::modAM()
 {
 	for (int i = 0; i < sample; i++) {
 		s.I[i] = (1 + (bits[i] ? 1 : 0)) / 2.;
+		//s.I[i] = bits[i] ? 1 : -1;
 		s.Q[i] = 0.0;
 	}
 }
@@ -249,12 +328,8 @@ void modulation::manipulation()
 	default:
 		break;
 	}
-	base temp;
-	double phase = 0;
 	for (int i = 0; i < sample; i++) {
-		phase += 2. * M_PI * fc / (fd * 1000);
-		temp = base(cos(phase), sin(phase));
-		s.s[i] = base(s.I[i], s.Q[i]) * temp;
+		s.s[i] = base(s.I[i], s.Q[i]);
 	}
 }
 
@@ -269,6 +344,14 @@ signal modulation::createBaseSignal()
 	result.erase(delay, sample_base);
 	s.N = sample;
 	result.N = sample_base;
+
+	double phase = 0;
+	base temp;
+	for (int i = 0; i < s.N; i++) {
+		phase += 2 * M_PI * deltaF / (fd * 1000);
+		temp = base(cos(phase), sin(phase));
+		s.s[i] *= temp;
+	}
 	normalizeSize(result, s);
 	return result;
 }

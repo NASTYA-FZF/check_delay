@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <random>
 #include <numeric>
+#include <thread>
 
 typedef std::complex<double> base;
 
@@ -68,6 +69,14 @@ std::pair<double, double> findMax(std::vector<double> corr, std::vector<double> 
 
 void addNoise(signal s, double snr, signal& s_n);
 
+double criteria(std::vector<double> corr);
+
+void one_sdvig(signal s_fully, signal s, int delay, std::vector<double>& res_fft);
+
+std::vector<std::vector<double>> create_f_t(signal s_fully, signal s, double fd, std::vector<double>& ff, std::vector<double>& tau);
+
+std::pair<double, double> find_sdvig(std::vector<std::vector<double>>& image, std::vector<double>& ff, std::vector<double>& tau);
+
 class modulation {
 	std::vector<double> t;
 	signal s;
@@ -76,7 +85,7 @@ class modulation {
 	int nbits;
 	int sample_base;
 	double bitrate;
-	double fc;
+	double deltaF;
 	int delay;
 	double snr;
 	type_modulation type;

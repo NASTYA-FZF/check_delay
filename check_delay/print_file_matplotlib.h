@@ -11,3 +11,5 @@ void print_data(std::ofstream& file, std::vector<double> s, std::vector<double> 
 void print_add_points(std::vector<double> s, std::vector<double> t, std::string filename, std::string label = "");
 
 void print_add_graph(std::vector<double> s, std::vector<double> t, std::string filename, std::string title, std::string xlabel, std::string ylabel, std::string label = "", std::vector<double> axvline = {});
+
+void print_3d(std::vector<double> x, std::vector<double> y, std::vector<std::vector<double>> z, std::string filename, std::string title);

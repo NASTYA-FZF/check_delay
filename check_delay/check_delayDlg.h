@@ -5,7 +5,6 @@
 #pragma once
 #include "signalProccesser.h"
 #include "print_file_matplotlib.h"
-#include <thread>
 
 
 // Диалоговое окно CcheckdelayDlg
@@ -61,6 +60,7 @@ public:
 	CProgressCtrl progress_experement;
 	afx_msg void OnBnClickedButtonDrawOne();
 	afx_msg void OnBnClickedButtonDrawMany();
+	afx_msg void OnBnClickedButton1();
 };
 
 int mainThread(double _fd, int _nbits, double _bitrate, double _fc, double _delay, double _snr, double _snr_fully, double duration_base, type_modulation _type, double& result, int N_generate);

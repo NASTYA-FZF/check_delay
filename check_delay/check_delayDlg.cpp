@@ -28,9 +28,9 @@ CcheckdelayDlg::CcheckdelayDlg(CWnd* pParent /*=nullptr*/)
 	, result_delay(_T(""))
 	, sample_base(400)
 	, snr_fully(10)
-	, min_snr(-30)
-	, max_snr(10)
-	, step_snr(1)
+	, min_snr(0)
+	, max_snr(1000)
+	, step_snr(10)
 	, N_generate(300)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
@@ -65,6 +65,7 @@ BEGIN_MESSAGE_MAP(CcheckdelayDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BUTTON_ESTIMATE, &CcheckdelayDlg::OnBnClickedButtonEstimate)
 	ON_BN_CLICKED(IDC_BUTTON_DRAW_ONE, &CcheckdelayDlg::OnBnClickedButtonDrawOne)
 	ON_BN_CLICKED(IDC_BUTTON_DRAW_MANY, &CcheckdelayDlg::OnBnClickedButtonDrawMany)
+	ON_BN_CLICKED(IDC_BUTTON1, &CcheckdelayDlg::OnBnClickedButton1)
 END_MESSAGE_MAP()
 
 
@@ -139,10 +140,11 @@ int mainThread(double _fd, int _nbits, double _bitrate, double _fc, double _dela
 		std::vector<double> corr;
 		std::vector<double> t_corr;
 		correlation(fully_signal_noise, base_signal_noise, 1. / (_fd * 1000), corr, t_corr);
-		auto a = findMax(corr, t_corr, _delay);
-		if (abs(a.first - _delay / 1000) <= 0.5 / _bitrate) {
+		result += criteria(corr);
+		//auto a = findMax(corr, t_corr, _delay);
+		/*if (abs(a.first - _delay / 1000) <= 0.5 / _bitrate) {
 			result += 1;
-		}
+		}*/
 	}
 	result /= N_exp;
 	return 0;
@@ -171,7 +173,31 @@ std::pair<double, double> mainProcess(double _fd, int _nbits, double _bitrate, d
 	print_graph_file(manipulated.getBits(), t, "fully_signal_s.txt", "Кодовая последовательность", "время, с", "Значение бита", "", { _delay / 1000, _delay / 1000 + duration_base / 1000 });
 	print_add_graph(fully_signal_noise.getSreal(), t, "fully_signal_s.txt", "Сигнал полного", "время, с", "", "", { _delay / 1000, _delay / 1000 + duration_base / 1000 });
 	auto a = findMax(corr, t_corr, _delay);
+	a.second = criteria(corr);
 	print_add_graph(corr, t_corr, "fully_signal_s.txt", "Корреляция", "Временной сдвиг τ, с", "Коэффициент корреляции, R(τ)", "", { a.first });
+	return a;
+}
+
+std::pair<double, double> mainSecondProcess(double _fd, int _nbits, double _bitrate, double _fc, double _delay, double _snr, double _snr_fully, double duration_base, type_modulation _type)
+{
+	modulation manipulated;
+	manipulated.setParam(_fd, _nbits, _bitrate, _fc, _delay, duration_base, _type);
+	manipulated.manipulation();
+	auto base_signal = manipulated.createBaseSignal();
+	auto fully_signal = manipulated.getS();
+	auto t = manipulated.getT();
+
+	signal base_signal_noise;
+	signal fully_signal_noise;
+	addNoise(base_signal, _snr, base_signal_noise);
+	addNoise(fully_signal, _snr_fully, fully_signal_noise);
+
+	std::vector<double> ff;
+	std::vector<double> tau;
+	auto image = create_f_t(fully_signal_noise, base_signal_noise, _fd * 1000, ff, tau);
+	print_3d(ff, tau, image, "3d CFU.txt", "Взаимная функция неопределенности");
+	auto a = find_sdvig(image, ff, tau);
+
 	return a;
 }
 
@@ -181,10 +207,10 @@ void CcheckdelayDlg::OnBnClickedButcreate()
 	UpdateData(TRUE);
 	auto mark_delay = mainProcess(fd, nbits, bitrate, fc, delay, snr, snr_fully, sample_base, type);
 	if (abs(mark_delay.first - delay / 1000) > 0.5 / bitrate) {
-		result_delay.Format(_T("Оцененный сдвиг: %.4f мс; Отличие от заданного: %.3f %%; Некорректно: больше, чем один бит"), mark_delay.first * 1000, mark_delay.second);
+		result_delay.Format(_T("Оцененный сдвиг: %.4f мс; Критерий выраженности: %.3f %%; Некорректно: больше, чем один бит"), mark_delay.first * 1000, mark_delay.second);
 	}
 	else {
-		result_delay.Format(_T("Оцененный сдвиг: %.4f мс; Отличие от заданного: %.3f %%; Корректно: в пределах одного символа"), mark_delay.first * 1000, mark_delay.second);
+		result_delay.Format(_T("Оцененный сдвиг: %.4f мс; Критерий выраженности: %.3f %%; Корректно: в пределах одного символа"), mark_delay.first * 1000, mark_delay.second);
 	}
 	UpdateData(FALSE);
 	WinExec("python drawing.py fully_signal_s.txt", SW_HIDE);
@@ -243,9 +269,9 @@ void StartThread(CcheckdelayDlg* dlg)
 				dlg->fd, 
 				dlg->nbits, 
 				dlg->bitrate, 
-				dlg->fc, 
-				dlg->delay, 
 				dlg->vec_snr[i + j / 3],
+				dlg->delay, 
+				dlg->snr,
 				dlg->snr_fully, 
 				dlg->sample_base,
 				types[j],
@@ -261,7 +287,7 @@ void StartThread(CcheckdelayDlg* dlg)
 		}
 	}
 	dlg->progress_experement.SetPos(100);
-	print_graph_file(dlg->vec_p[0], dlg->vec_snr, "experience.txt", "Исследование устойчивости оценки временной задержки", "SNR, дБ", "Доверительная вероятность", "AM");
+	print_graph_file(dlg->vec_p[0], dlg->vec_snr, "experience.txt", "Исследование устойчивости метода максимального правдоподобия", "Доплеровское смещение, Гц", "Критерий выраженности главного максимума", "AM");
 	print_add_points(dlg->vec_p[1], dlg->vec_snr, "experience.txt", "PM2");
 	print_add_points(dlg->vec_p[2], dlg->vec_snr, "experience.txt", "MFM");
 	WinExec("python drawing.py experience.txt", SW_HIDE);
@@ -288,4 +314,15 @@ void CcheckdelayDlg::OnBnClickedButtonDrawMany()
 {
 	// TODO: добавьте свой код обработчика уведомлений
 	WinExec("python drawing.py experience.txt", SW_HIDE);
+}
+
+
+void CcheckdelayDlg::OnBnClickedButton1()
+{
+	// TODO: добавьте свой код обработчика уведомлений
+	UpdateData(TRUE);
+	auto mark_delay = mainSecondProcess(fd, nbits, bitrate, fc, delay, snr, snr_fully, sample_base, type);
+	result_delay.Format(_T("Оцененное доплеровчкое смещение: %.4f Гц; Оцененный сдвиг: %.4f мс"), mark_delay.first, mark_delay.second * 1000);
+	UpdateData(FALSE);
+	WinExec("python drawing.py \"3d CFU.txt\"", SW_HIDE);
 }

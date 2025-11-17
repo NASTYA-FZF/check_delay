@@ -1,3 +1,4 @@
+from matplotlib import cm
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -21,8 +22,10 @@ def modal_window(title, text):
 def prepare_data(data):
     pointX = []
     pointY = []
+    pointZ = []
     labels = []
     vertical_lines = []
+    mode = "2d"
     for d in data:
         name, value = d.split(":")
         if name == "title":
@@ -40,23 +43,39 @@ def prepare_data(data):
         elif name == "pointY":
             pointY.append([float(i) for i in value.split()])
             continue
+        elif name == "pointZ":
+            pointZ.append([float(i) for i in value.split()])
+            continue
         elif name == "label":
             labels.append(value)
             continue
         elif name == "axvline":
             vertical_lines = value.split()
             continue
-    for i in range(len(pointX)):
+        elif name == "mode":
+            mode = value
+            continue
+    if mode == "2d":
+        for i in range(len(pointX)):
+            if len(labels) > 0:
+                plt.plot(pointX[i], pointY[i], label=labels[i])
+            else:
+                plt.plot(pointX[i], pointY[i])
         if len(labels) > 0:
-            plt.plot(pointX[i], pointY[i], label=labels[i])
-        else:
-            plt.plot(pointX[i], pointY[i])
-    if len(labels) > 0:
-        plt.legend()
-    for x in vertical_lines:
-        if x.isdigit() or len(x.split(".")) == 2:
-            plt.axvline(x=float(x), color="r", linestyle="--")
-    plt.grid(True)
+            plt.legend()
+        for x in vertical_lines:
+            if x.isdigit() or len(x.split(".")) == 2:
+                plt.axvline(x=float(x), color="r", linestyle="--")
+        plt.grid(True)
+    else:
+        pointZ = np.array(pointZ).reshape(len(pointY[0]), len(pointX[0]))
+        pointX, pointY = np.meshgrid(pointX[0], pointY[0])
+        fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+        ax.plot_surface(pointX, pointY, pointZ, vmin=pointZ.min() * 2, cmap=cm.Blues)
+
+        ax.set(xticklabels=[], yticklabels=[], zticklabels=[])
+
+        plt.show()
 
 
 def draw_graph(name_file):

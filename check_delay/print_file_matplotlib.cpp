@@ -55,3 +55,25 @@ void print_add_graph(std::vector<double> s, std::vector<double> t, std::string f
 	print_data(file, s, t, title, xlabel, ylabel, label, axvline);
 	file.close();
 }
+
+void print_3d(std::vector<double> x, std::vector<double> y, std::vector<std::vector<double>> z, std::string filename, std::string title)
+{
+	std::ofstream file;          // поток для записи
+	file.open("graphs/" + filename, std::ios::binary); // окрываем файл для записи
+	file << "mode:3d" << std::endl;
+	file << "pointX:";
+	for (auto xx : x) {
+		file << xx << " ";
+	}
+	file << "\npointY:";
+	for (auto yy : y) {
+		file << yy << " ";
+	}
+	file << "\npointZ:";
+	for (auto Z : z) {
+		for (auto zz : Z) {
+			file << zz << " ";
+		}
+	}
+	file.close();
+}
