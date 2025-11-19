@@ -153,14 +153,16 @@ double criteria(std::vector<double> corr)
 {
 	int indexMax = std::max_element(corr.begin(), corr.end()) - corr.begin();
 	double c_max = corr[indexMax];
-	int mask = 2;
+	double avr = 0;
+	for (int i = 0; i < corr.size(); i++) {
+		avr += corr[i];
+	}
+	avr /= corr.size();
 	double sigma = 0;
 	for (int i = 0; i < corr.size(); i++) {
-		if (i < indexMax - mask || i > indexMax + mask) {
-			sigma += (corr[i] - c_max) * (corr[i] - c_max);
-		}
+		sigma += (corr[i] - avr) * (corr[i] - avr);
 	}
-	sigma = sqrt(sigma) / (corr.size() - (mask * 2 + 1));
+	sigma = sqrt(sigma) / corr.size();
 	return c_max / sigma;
 }
 
@@ -186,7 +188,7 @@ std::vector<std::vector<double>> create_f_t(signal s_fully, signal s, double fd,
 {
 	int max_delay = s_fully.N - s.N;
 	std::vector<std::vector<double>> res(max_delay);
-	int max_threads = 4;
+	int max_threads = 8;
 	thread* thrs = new thread[max_threads];
 	for (int i = 0; i < max_delay; i += max_threads) {
 		for (int j = 0; j < max_threads; j++) {

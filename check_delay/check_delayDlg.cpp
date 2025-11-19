@@ -22,9 +22,9 @@ CcheckdelayDlg::CcheckdelayDlg(CWnd* pParent /*=nullptr*/)
 	, fd(1.1)
 	, nbits(150)
 	, bitrate(150)
-	, fc(0.5)
+	, fc(100)
 	, delay(100)
-	, snr(3)
+	, snr(15)
 	, result_delay(_T(""))
 	, sample_base(400)
 	, snr_fully(10)
@@ -321,7 +321,7 @@ void CcheckdelayDlg::OnBnClickedButton1()
 {
 	// TODO: добавьте свой код обработчика уведомлений
 	UpdateData(TRUE);
-	auto mark_delay = mainSecondProcess(fd, nbits, bitrate, fc, delay, snr, snr_fully, sample_base, type);
+	auto mark_delay = mainSecondProcess(fd, nbits, bitrate, -fc, delay, snr, snr_fully, sample_base, type);
 	result_delay.Format(_T("Оцененное доплеровчкое смещение: %.4f Гц; Оцененный сдвиг: %.4f мс"), mark_delay.first, mark_delay.second * 1000);
 	UpdateData(FALSE);
 	WinExec("python drawing.py \"3d CFU.txt\"", SW_HIDE);
