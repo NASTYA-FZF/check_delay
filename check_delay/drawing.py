@@ -80,14 +80,17 @@ def prepare_data(data):
         max_index = np.unravel_index(np.argmax(pointZ), pointZ.shape)
         max_value = pointZ[max_index]
         pointX, pointY = np.meshgrid(pointX[0], pointY[0])
-        _, ax = plt.subplots(subplot_kw={"projection": "3d"})
+        """ _, ax = plt.subplots(subplot_kw={"projection": "3d"})
         surf = ax.plot_surface(pointX, pointY, pointZ, cmap="inferno")
         ax.set_xlabel("Частота, Гц")
         ax.set_ylabel("Временной сдвиг, с")
-        ax.set_title("Взаимная функция неопределенности")
+        ax.set_title("Взаимная функция неопределенности")"""
 
         _, ax = plt.subplots()
-        im = ax.imshow(pointZ, cmap="inferno")
+        import math
+
+        logPointZ = [[10 * math.log(j) for j in i] for i in pointZ]
+        im = ax.imshow(logPointZ, cmap="inferno")
 
         def format_coord(x, y):
             """Форматирование координат для статусной строки"""
@@ -111,11 +114,11 @@ def prepare_data(data):
             markersize=10,  # размер маркера
             markeredgecolor="white",  # белая обводка
             markerfacecolor="red",  # заливка красная
-            label=f"Максимум: {max_value:.2f}",
+            label=f"Максимум",
         )
 
         ax.annotate(
-            f"Максимум: {max_value:.2f}",
+            f"Максимум",
             xy=(max_index[1], max_index[0]),
             xytext=(max_index[1] + 10, max_index[0] - 10),
             arrowprops=dict(arrowstyle="->", color="red"),
@@ -123,7 +126,7 @@ def prepare_data(data):
             color="red",
         )
 
-        contour_lines = ax.contour(pointZ, colors="white", linewidths=0.5, alpha=0.7)
+        contour_lines = ax.contour(logPointZ, colors="black", linewidths=1, alpha=0.7)
         ax.set_xlabel("Частота, Гц")
         ax.set_ylabel("Временной сдвиг, мс")
         ax.set_title("Взаимная функция неопределенности")
@@ -135,6 +138,7 @@ def prepare_data(data):
 
         _, ax = plt.subplots()
         im = ax.imshow(pointZ, cmap="inferno")
+
         def format_coord(x, y):
             """Форматирование координат для статусной строки"""
             x_int = int(x + 0.5)

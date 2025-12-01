@@ -19,15 +19,15 @@
 
 CcheckdelayDlg::CcheckdelayDlg(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_CHECK_DELAY_DIALOG, pParent)
-	, fd(1.1)
-	, nbits(150)
-	, bitrate(150)
+	, fd(2.003)
+	, nbits(400)
+	, bitrate(400)
 	, fc(100)
 	, delay(100)
 	, snr(15)
 	, result_delay(_T(""))
 	, sample_base(400)
-	, snr_fully(10)
+	, snr_fully(15)
 	, min_snr(0)
 	, max_snr(1000)
 	, step_snr(10)
@@ -66,6 +66,7 @@ BEGIN_MESSAGE_MAP(CcheckdelayDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BUTTON_DRAW_ONE, &CcheckdelayDlg::OnBnClickedButtonDrawOne)
 	ON_BN_CLICKED(IDC_BUTTON_DRAW_MANY, &CcheckdelayDlg::OnBnClickedButtonDrawMany)
 	ON_BN_CLICKED(IDC_BUTTON1, &CcheckdelayDlg::OnBnClickedButton1)
+	ON_BN_CLICKED(IDC_BUTTON_DRAW_ONE2, &CcheckdelayDlg::OnBnClickedButtonDrawOne2)
 END_MESSAGE_MAP()
 
 
@@ -171,7 +172,8 @@ std::pair<double, double> mainProcess(double _fd, int _nbits, double _bitrate, d
 	fully_signal_noise.resize(sample);
 	base_signal_noise.resize(sample);
 	print_graph_file(manipulated.getBits(), t, "fully_signal_s.txt", "Кодовая последовательность", "время, с", "Значение бита", "", { _delay / 1000, _delay / 1000 + duration_base / 1000 });
-	print_add_graph(fully_signal_noise.getSreal(), t, "fully_signal_s.txt", "Сигнал полного", "время, с", "", "", { _delay / 1000, _delay / 1000 + duration_base / 1000 });
+	print_add_graph(fully_signal_noise.getSreal(), t, "fully_signal_s.txt", "Сигнал полного", "время, с", "", "Синфазная компонента", { _delay / 1000, _delay / 1000 + duration_base / 1000 });
+	print_add_points(fully_signal_noise.getSimag(), t, "fully_signal_s.txt", "Квадратурная компонента");
 	auto a = findMax(corr, t_corr, _delay);
 	a.second = criteria(corr);
 	print_add_graph(corr, t_corr, "fully_signal_s.txt", "Корреляция", "Временной сдвиг τ, с", "Коэффициент корреляции, R(τ)", "", { a.first });
@@ -194,7 +196,13 @@ std::pair<double, double> mainSecondProcess(double _fd, int _nbits, double _bitr
 
 	std::vector<double> ff;
 	std::vector<double> tau;
-	auto image = create_f_t(fully_signal_noise, base_signal_noise, _fd * 1000, ff, tau);
+	auto image = create_f_t(fully_signal_noise, base_signal_noise, _fd * 1000, ff, tau); 
+	int sample = fully_signal_noise.N;
+	fully_signal_noise.resize(sample);
+	base_signal_noise.resize(sample);
+	print_graph_file(manipulated.getBits(), t, "fully_signal_s cfu.txt", "Кодовая последовательность", "время, с", "Значение бита", "", { _delay / 1000, _delay / 1000 + duration_base / 1000 });
+	print_add_graph(fully_signal_noise.getSreal(), t, "fully_signal_s cfu.txt", "Сигнал полного", "время, с", "", "Синфазная компонента", { _delay / 1000, _delay / 1000 + duration_base / 1000 });
+	print_add_points(fully_signal_noise.getSimag(), t, "fully_signal_s cfu.txt", "Квадратурная компонента");
 	print_3d(ff, tau, image, "3d CFU.txt", "Взаимная функция неопределенности");
 	auto a = find_sdvig(image, ff, tau);
 
@@ -324,5 +332,14 @@ void CcheckdelayDlg::OnBnClickedButton1()
 	auto mark_delay = mainSecondProcess(fd, nbits, bitrate, -fc, delay, snr, snr_fully, sample_base, type);
 	result_delay.Format(_T("Оцененное доплеровчкое смещение: %.4f Гц; Оцененный сдвиг: %.4f мс"), mark_delay.first, mark_delay.second * 1000);
 	UpdateData(FALSE);
+	WinExec("python drawing.py \"fully_signal_s cfu.txt\"", SW_HIDE);
 	WinExec("python drawing.py \"3d CFU.txt\"", SW_HIDE);
+}
+
+
+void CcheckdelayDlg::OnBnClickedButtonDrawOne2()
+{
+	// TODO: добавьте свой код обработчика уведомлений
+	WinExec("python drawing.py \"3d CFU.txt\"", SW_HIDE);
+	WinExec("python drawing.py \"fully_signal_s cfu.txt\"", SW_HIDE);
 }

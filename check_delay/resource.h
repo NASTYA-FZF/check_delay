@@ -27,6 +27,7 @@
 #define IDC_BUTTON2                     1020
 #define IDC_BUTTON_DRAW_MANY            1020
 #define IDC_BUTTON1                     1021
+#define IDC_BUTTON_DRAW_ONE2            1022
 
 // Next default values for new objects
 // 
