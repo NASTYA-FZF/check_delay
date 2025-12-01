@@ -179,8 +179,14 @@ void one_sdvig(signal s_fully, signal s, int delay, std::vector<double>& res_fft
 	temp.resize(size_2);
 	fft(temp, true);
 	res_fft.resize(size_2);
+	int center = size_2 / 2;
 	for (int i = 0; i < size_2; i++) {
-		res_fft[i] = sqrt(temp[i].real() * temp[i].real() + temp[i].imag() * temp[i].imag());
+		if (i < center) {
+			res_fft[i + center] = sqrt(temp[i].real() * temp[i].real() + temp[i].imag() * temp[i].imag());
+		}
+		else {
+			res_fft[i - center] = sqrt(temp[i].real() * temp[i].real() + temp[i].imag() * temp[i].imag());
+		}
 	}
 }
 
@@ -213,8 +219,15 @@ std::vector<std::vector<double>> create_f_t(signal s_fully, signal s, double fd,
 	tau.resize(res.size());
 	double step_ff = fd / ff.size();
 	double step_tau = 1. / fd;
+	int center = ff.size() / 2;
 	for (int i = 0; i < ff.size(); i++) {
-		ff[i] = i * step_ff;
+		if (i < center) {
+			ff[i + center] = i * step_ff;
+		}
+		else {
+			ff[i - center] = -fd + i * step_ff;
+		}
+		//ff[i] = i * step_ff;
 	}
 	for (int i = 0; i < tau.size(); i++) {
 		tau[i] = i * step_tau;
